@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy import create_engine, Column, Integer, String, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from ai_validator import validate_word
 
 # SQLite database setup
 DATABASE_URL = "sqlite:///wordrush.db"
@@ -39,3 +40,8 @@ async def add_score(player_name: str, score: int):
     db.refresh(new_score)
     db.close()
     return {"status": "success", "player_name": player_name, "score": score}
+
+@app.get("/validate/{category}/{letter}/{word}")
+async def validate(category: str, letter: str, word: str):
+    is_valid = validate_word(category, letter, word)
+    return {"category": category, "letter": letter, "word": word, "is_valid": is_valid}

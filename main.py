@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Request
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
 
 @app.get("/")
-async def root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def root():
+    return {"message": "Welcome to WordRush!"}
+
+@app.get("/test")
+async def test_endpoint():
+    return {"status": "success", "detail": "Test endpoint is working!"}

@@ -40,7 +40,7 @@ def game():
         session['round_data'] = generate_round()
         session['total_score'] = 0
         session['session_id'] = generate_session_id()
-        session['votes'] = {}  # Store votes per round
+        session['votes'] = {}
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
                           categories=session['round_data']["categories"], 
@@ -63,6 +63,7 @@ def submit():
     for category, answer in answers.items():
         if answer:
             is_valid, explanation = validate_word(category, letter, answer)
+            print(f"Validation for {category}/{letter}/{answer}: {is_valid}, {explanation}")  # Debug
             points = 10 if is_valid else 0
             uniqueness_bonus = 5 if is_valid and not any(validate_word(category, letter, a)[0] for a in answers.values() if a != answer and a) else 0
         else:
@@ -77,16 +78,16 @@ def submit():
             "voted": session.get('votes', {}).get(category, False)
         }
     
-    # Apply votes
     for category, result in results.items():
         if result["voted"]:
             result["is_valid"] = True
-            result["points"] = 10  # Base points only, no uniqueness for voted answers
+            result["points"] = 10
             result["explanation"] += " (Accepted by vote)"
     
     round_score = sum(result["points"] for result in results.values())
     session['total_score'] = session.get('total_score', 0) + round_score
-    session['last_results'] = results  # Store for voting
+    session['last_results'] = results
+    session['last_round_score'] = round_score
     
     db = SessionLocal()
     new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
@@ -111,7 +112,6 @@ def vote(category):
         session['votes'][category] = True
         session.modified = True
         
-        # Update score
         results = session['last_results']
         results[category]["voted"] = True
         results[category]["is_valid"] = True

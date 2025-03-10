@@ -144,7 +144,9 @@
             <input type="hidden" name="player_name" value="{{ player_name }}">
             <input type="hidden" name="mode" value="{{ mode }}">
             <input type="hidden" name="session_id" value="{{ session_id }}">
+            <input type="hidden" name="letter" value="{{ letter }}">
             {% for category in categories %}
+                <input type="hidden" name="categories" value="{{ category }}">
                 <div class="category">
                     {{ category }}: <input type="text" name="{{ category }}" autocomplete="off" value="">
                 </div>
@@ -226,7 +228,7 @@
                 const formData = new FormData(form);
                 const answers = {};
                 formData.forEach((value, key) => {
-                    if (!['player_name', 'mode', 'session_id'].includes(key)) answers[key] = value;
+                    if (!['player_name', 'mode', 'session_id', 'letter', 'categories'].includes(key)) answers[key] = value;
                 });
                 ws.send(JSON.stringify({ type: "submit_answers", answers: answers }));
             });

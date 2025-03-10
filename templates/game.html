@@ -28,11 +28,11 @@
             <h2>Round Results</h2>
             <p>Round Score: {{ round_score }}</p>
             {% for category, result in results.items() %}
-                <p class="{% if result.points > 0 %}correct{% else %}incorrect{% endif %}">
+                <p class="{% if result.is_valid %}correct{% else %}incorrect{% endif %}">
                     {{ category }}: 
                     {% if result.answer %}"{{ result.answer }}"{% else %}(blank){% endif %} - 
-                    {% if result.is_valid %}Correct ({{ result.points }} points)
-                    {% elif result.points > 0 %}No valid answer exists ({{ result.points }} points)
+                    {% if result.is_valid and result.points > 10 %}Correct (10 + 5 bonus = {{ result.points }} points)
+                    {% elif result.is_valid %}Correct ({{ result.points }} points)
                     {% else %}Incorrect (0 points){% endif %}
                 </p>
             {% endfor %}

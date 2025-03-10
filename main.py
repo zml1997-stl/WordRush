@@ -1,5 +1,6 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, Integer, String, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -25,6 +26,7 @@ class Score(Base):
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
 # Multiplayer session management
 multiplayer_sessions = defaultdict(dict)
@@ -36,11 +38,11 @@ def generate_player_id():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 @app.get("/")
-async def home():
-    return HTMLResponse(content=open("templates/index.html").read())
+async def home(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/game")
-async def game(mode: str = "single"):
+async def game(request: Request, mode: str = "single"):
     if mode == "multi":
         session_id = generate_session_id()
         multiplayer_sessions[session_id] = {
@@ -48,9 +50,24 @@ async def game(mode: str = "single"):
             'round_data': generate_round(),
             'votes': {}
         }
-        return HTMLResponse(content=open("templates/game.html").read())
+        return templates.TemplateResponse("game.html", {
+            "request": request,
+            "letter": multiplayer_sessions[session_id]['round_data']["letter"],
+            "categories": multiplayer_sessions[session_id]['round_data']["categories"],
+            "total_score": 0,
+            "session_id": session_id,
+            "mode": mode
+        })
     else:
-        return HTMLResponse(content=open("templates/game.html").read())
+        round_data = generate_round()
+        return templates.TemplateResponse("game.html", {
+            "request": request,
+            "letter": round_data["letter"],
+            "categories": round_data["categories"],
+            "total_score": 0,
+            "session_id": generate_session_id(),
+            "mode": mode
+        })
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):

@@ -5,16 +5,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WordRush - Game</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin-top: 20px; }
-        .timer { font-size: 24px; color: red; }
-        .category { margin: 10px 0; }
-        input { padding: 5px; width: 200px; }
-        button { padding: 10px 20px; font-size: 16px; margin: 5px; }
-        .score { font-size: 20px; color: green; }
-        .results { margin-top: 20px; }
-        .correct { color: green; }
-        .incorrect { color: red; }
-        .explanation { font-size: 12px; color: gray; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .timer {
+            font-size: 1.5rem;
+            color: #ffcc00;
+            margin-bottom: 20px;
+        }
+        .score {
+            font-size: 1.5rem;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+        .category {
+            margin: 15px 0;
+        }
+        input {
+            padding: 10px;
+            width: 250px;
+            border: 2px solid #6a11cb;
+            border-radius: 5px;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1rem;
+            color: #6a11cb;
+            background: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin: 5px;
+        }
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        .results {
+            margin-top: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: left;
+            display: inline-block;
+        }
+        .correct {
+            color: #4caf50;
+        }
+        .incorrect {
+            color: #ff4444;
+        }
+        .explanation {
+            font-size: 0.9rem;
+            color: #cccccc;
+        }
+        .vote-button {
+            background: #ffcc00;
+            color: #6a11cb;
+            margin-left: 10px;
+        }
+        .back-link {
+            display: block;
+            margin-top: 20px;
+            color: #cccccc;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -38,7 +115,7 @@
                     <span class="explanation"> - {{ result.explanation }}</span>
                     {% if not result.is_valid and not result.voted %}
                         <form action="/vote/{{ category }}" method="POST" style="display:inline;">
-                            <button type="submit">Vote to Accept</button>
+                            <button type="submit" class="vote-button">Vote to Accept</button>
                         </form>
                     {% endif %}
                 </p>
@@ -55,7 +132,7 @@
             <button type="submit">Submit Answers</button>
         </form>
     {% endif %}
-    <p><a href="/">Back to Home</a></p>
+    <a href="/" class="back-link">Back to Home</a>
 
     <script>
         {% if not show_results %}

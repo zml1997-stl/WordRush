@@ -58,3 +58,13 @@ def calculate_multiplayer_scores(players_answers, round_data):
                     score += 5  # Bonus for unique answer
         scores[player_id] = score
     return scores
+
+def handle_vote(category: str, session_id: str, player_id: str, multiplayer_sessions: dict):
+    """
+    Handle voting on a category in a multiplayer session.
+    Updates the session data to reflect the vote.
+    """
+    if session_id in multiplayer_sessions and player_id in multiplayer_sessions[session_id]['players']:
+        multiplayer_sessions[session_id]['votes'][category] = True
+        return True
+    return False

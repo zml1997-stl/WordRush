@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordRush - Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 20px; }
+        .timer { font-size: 24px; color: red; }
+        .category { margin: 10px 0; }
+        input { padding: 5px; width: 200px; }
+        button { padding: 10px 20px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h1>WordRush</h1>
+    <p>Letter: <strong>{{ letter }}</strong></p>
+    <div id="timer" class="timer">Time Left: 60</div>
+    <form id="gameForm" action="/submit" method="POST">
+        {% for category in categories %}
+            <div class="category">
+                {{ category }}: <input type="text" name="{{ category }}" autocomplete="off">
+            </div>
+        {% endfor %}
+        <button type="submit">Submit Answers</button>
+    </form>
+    <p><a href="/">Back to Home</a></p>
+
+    <script>
+        let timeLeft = 60;
+        const timer = document.getElementById('timer');
+        const form = document.getElementById('gameForm');
+        
+        const countdown = setInterval(() => {
+            timeLeft--;
+            timer.textContent = `Time Left: ${timeLeft}`;
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                form.submit();
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

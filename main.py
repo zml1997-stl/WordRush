@@ -42,7 +42,7 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/game")
-async def game(request: Request, mode: str = "single"):
+async def game(request: Request, mode: str = "single", player: str = "Player", show_results: bool = False):
     if mode == "multi":
         session_id = generate_session_id()
         multiplayer_sessions[session_id] = {
@@ -56,7 +56,9 @@ async def game(request: Request, mode: str = "single"):
             "categories": multiplayer_sessions[session_id]['round_data']["categories"],
             "total_score": 0,
             "session_id": session_id,
-            "mode": mode
+            "mode": mode,
+            "player_name": player,
+            "show_results": show_results
         })
     else:
         round_data = generate_round()
@@ -66,15 +68,72 @@ async def game(request: Request, mode: str = "single"):
             "categories": round_data["categories"],
             "total_score": 0,
             "session_id": generate_session_id(),
-            "mode": mode
+            "mode": mode,
+            "player_name": player,
+            "show_results": show_results
         })
 
 @app.post("/submit")
 async def submit(request: Request):
-    form_data = await request.form()
-    answers = {key: value for key, value in form_data.items()}
-    # Process answers and calculate scores
-    return {"status": "success", "answers": answers}
+    form_data = await request.json()
+    answers = form_data.get("answers", {})
+    player_name = form_data.get("player_name", "Player")
+    mode = form_data.get("mode", "single")
+    session_id = form_data.get("session_id", "")
+
+    if mode == "multi":
+        session_data = multiplayer_sessions.get(session_id, {})
+        round_data = session_data.get("round_data", {})
+    else:
+        round_data = generate_round()
+
+    letter = round_data["letter"]
+    category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
+    validation_results = validate_word(category_word_pairs) if category_word_pairs else {}
+
+    results = {}
+    for category, answer in answers.items():
+        if answer:
+            is_valid, explanation, is_unique = validation_results.get(category, (False, "Validation failed", True))
+            points = 10 if is_valid else 0
+            uniqueness_bonus = 5 if is_valid and is_unique else 0
+        else:
+            is_valid, explanation, is_unique = False, "No answer provided", True
+            points = uniqueness_bonus = 0
+        results[category] = {
+            "answer": answer,
+            "is_valid": is_valid,
+            "points": points + uniqueness_bonus,
+            "explanation": explanation,
+            "voted": False
+        }
+
+    round_score = sum(result["points"] for result in results.values())
+    total_score = round_score  # For single-player mode, total_score is the same as round_score
+
+    db = SessionLocal()
+    new_score = Score(player_name=player_name, score=round_score)
+    db.add(new_score)
+    db.commit()
+    db.close()
+
+    return {"status": "success", "results": results, "round_score": round_score, "total_score": total_score}
+
+@app.post("/vote")
+async def vote(request: Request):
+    form_data = await request.json()
+    category = form_data.get("category", "")
+    player_name = form_data.get("player_name", "Player")
+    mode = form_data.get("mode", "single")
+    session_id = form_data.get("session_id", "")
+
+    if mode == "multi":
+        session_data = multiplayer_sessions.get(session_id, {})
+        if session_data:
+            session_data['votes'][category] = True
+            return {"status": "success", "message": f"Vote for {category} accepted by {player_name}"}
+    else:
+        return {"status": "success", "message": f"Vote for {category} accepted by {player_name}"}
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):

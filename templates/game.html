@@ -134,7 +134,29 @@
     {% endif %}
     <a href="/" class="back-link">Back to Home</a>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
+        const socket = io();
+
+        // Join the multiplayer session
+        socket.emit('join', { session_id: "{{ session_id }}" });
+
+        // Listen for new round events
+        socket.on('new_round_started', function(data) {
+            alert(`New round started! Letter: ${data.letter}, Categories: ${data.categories.join(', ')}`);
+            window.location.href = '/game?mode=multi';
+        });
+
+        // Listen for answers submitted by other players
+        socket.on('answers_submitted', function(data) {
+            console.log(`Player ${data.player_id} submitted answers:`, data.answers);
+        });
+
+        // Listen for vote acceptance
+        socket.on('vote_accepted', function(data) {
+            console.log(`Player ${data.player_id} accepted the vote for category: ${data.category}`);
+        });
+
         {% if not show_results %}
             let timeLeft = 120;
             const timer = document.getElementById('timer');

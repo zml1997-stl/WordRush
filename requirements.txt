@@ -6,4 +6,3 @@ requests
 jinja2
 websockets
 gunicorn
-gevent

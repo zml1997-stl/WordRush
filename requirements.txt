@@ -10,3 +10,4 @@ flask-socketio
 python-socketio
 gunicorn
 gevent
+gevent-websocket

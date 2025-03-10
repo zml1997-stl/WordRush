@@ -5,9 +5,5 @@ psycopg2-binary
 requests
 jinja2
 websockets
-flask
-flask-socketio
-python-socketio
 gunicorn
 gevent
-gevent-websocket

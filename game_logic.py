@@ -2,19 +2,24 @@ import random
 from ai_validator import validate_word
 
 CATEGORIES = [
-    "Fruit", "Country", "Animal", "Movie", "Color", "Sport", "City", "Food", "Book", "Clothing",
-    "Vehicle", "Plant", "Occupation", "Musical Instrument", "Furniture", "Drink", "Dessert", 
-    "Vegetable", "Bird", "Fish", "Insect", "Reptile", "Mammal", "Tree", "Flower", 
-    "Mountain", "River", "Lake", "Ocean", "Island", "Planet", "Star", "Constellation", 
-    "Weather", "Season", "Holiday", "Festival", "Game", "Toy", "Tool", "Weapon", 
-    "Building", "Room", "Appliance", "Electronics", "Software", "Website", "App", "Brand", 
-    "Company", "Job Title", "School Subject", "Language", "Currency", "Law", "Crime", 
-    "Sport Team", "Athlete", "Coach", "Dance", "Song", "Album", "Band", "Artist", 
-    "Painting", "Sculpture", "Museum", "Theater", "Play", "Actor", "Director", "Writer", 
-    "Poet", "Novel", "Poem", "Magazine", "Newspaper", "TV Show", "Cartoon", "Superhero", 
-    "Villain", "Mythical Creature", "God", "Religion", "Ceremony", "Tradition", "Custom", 
-    "Fashion", "Jewelry", "Shoe", "Hat", "Bag", "Fabric", "Material", "Element", 
-    "Chemical", "Disease", "Medicine", "Body Part", "Emotion"
+    "Famous Celebrities", "Types of Fruit", "Types of Vegetables", "Cities in the World", "Countries",
+    "Animals", "Types of Food", "Desserts", "Musical Instruments", "Sports", "Types of Clothing",
+    "Types of Drinks", "Things Found in a Kitchen", "Items in a Bathroom", "Items in a Bedroom", 
+    "Items in a Living Room", "Furniture", "Household Items", "Items in an Office", "School Subjects",
+    "Books", "Movies", "TV Shows", "Things Found at a Mall", "Things Found at a Park", "Items in a Garage",
+    "Items Found in a Car", "Things You Find in a Garden", "Types of Flowers", "Things That Are Red", 
+    "Things That Are Blue", "Things That Are Green", "Things That Are Yellow", "Modes of Transportation", 
+    "Modes of Communication", "Types of Weather", "Occupations", "Companies", "Brands", "Items Found in a Store",
+    "Types of Electronics", "Items in a Hospital", "Medical Terms", "Animals on a Farm", "Types of Trees",
+    "Types of Insects", "Body Parts", "Plants", "Hobbies", "Board Games", "Card Games", "Computer Programs",
+    "Household Chores", "Tools", "Things You Can Wear", "Types of Jewelry", "Types of Shoes", "Types of Hats",
+    "Party Supplies", "Vacation Spots", "Tourist Attractions", "Places to Visit", "Historical Figures",
+    "Historical Events", "Items in a Museum", "Items Found at the Beach", "Winter Activities", "Types of Dance",
+    "Music Genres", "Forms of Art", "Inventions", "Things You Can Write With", "Things That Are Soft",
+    "Things That Are Hard", "Things That Are Fast", "Things That Are Slow", "Things That Smell Good",
+    "Things That Smell Bad", "Types of Pets", "Items Found in a Library", "Types of Berries", "Types of Nuts",
+    "Things Found in a Farmhouse", "Things in the Wilderness", "Tools Found in a Workshop", "Items Found in a Gym",
+    "Things That Are Circular", "Things That Are Square", "Things That Are Triangular", "Modes of Entertainment"
 ]
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 

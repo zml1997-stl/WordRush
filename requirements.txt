@@ -8,3 +8,5 @@ websockets
 flask
 flask-socketio
 python-socketio
+gunicorn
+gevent

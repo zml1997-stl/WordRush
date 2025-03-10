@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordRush - Multiplayer Lobby</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            color: white;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .lobby-options {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        input {
+            padding: 10px;
+            width: 250px;
+            border: 2px solid #6a11cb;
+            border-radius: 5px;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            color: #6a11cb;
+            background: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>Multiplayer Lobby</h1>
+    <p>Welcome, <strong>{{ player_name }}</strong>!</p>
+    <div class="lobby-options">
+        <button onclick="startNewGame()">Start New Game</button>
+        <button onclick="joinGame()">Join Existing Game</button>
+    </div>
+
+    <script>
+        function startNewGame() {
+            const playerName = "{{ player_name }}";
+            window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}`;
+        }
+
+        function joinGame() {
+            const playerName = "{{ player_name }}";
+            const sessionCode = prompt("Enter the session code:");
+            if (sessionCode) {
+                window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}&session_id=${sessionCode}`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,1 +1,1 @@
-web: gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 main:app
+web: uvicorn main:app --host 0.0.0.0 --port $PORT

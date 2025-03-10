@@ -80,6 +80,15 @@ async def submit(request: Request):
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     player_id = generate_player_id()
+
+    # Ensure the session exists and has a 'players' key
+    if session_id not in multiplayer_sessions:
+        multiplayer_sessions[session_id] = {
+            'players': {},
+            'round_data': generate_round(),
+            'votes': {}
+        }
+
     multiplayer_sessions[session_id]['players'][player_id] = {
         'score': 0,
         'answers': {},

@@ -11,41 +11,67 @@
         input { padding: 5px; width: 200px; }
         button { padding: 10px 20px; font-size: 16px; margin: 5px; }
         .score { font-size: 20px; color: green; }
+        .results { margin-top: 20px; }
+        .correct { color: green; }
+        .incorrect { color: red; }
+        .spinner { display: none; font-size: 20px; color: blue; }
+        .spinner.active { display: block; }
     </style>
 </head>
 <body>
     <h1>WordRush</h1>
     <p>Letter: <strong>{{ letter }}</strong></p>
-    <div id="timer" class="timer">Time Left: 60</div>
+    <p>Session ID: {{ session_id }}</p>
+    <div id="timer" class="timer">Time Left: 120</div>
     <p class="score">Total Score: {{ total_score }}</p>
-    {% if message %}
-        <p>{{ message }}</p>
+    <div id="spinner" class="spinner {% if is_loading %}active{% endif %}">Generating categories...</div>
+
+    {% if show_results %}
+        <div class="results">
+            <h2>Round Results</h2>
+            <p>Round Score: {{ round_score }}</p>
+            {% for category, result in results.items() %}
+                <p class="{% if result.is_valid %}correct{% else %}incorrect{% endif %}">
+                    {{ category }}: 
+                    {% if result.answer %}"{{ result.answer }}"{% else %}(blank){% endif %} - 
+                    {% if result.is_valid %}Correct ({{ result.points }} points){% else %}Incorrect (0 points){% endif %}
+                </p>
+            {% endfor %}
+            <button onclick="startNewRound()">Next Round</button>
+        </div>
+    {% else %}
+        <form id="gameForm" action="/submit" method="POST">
+            {% for category in categories %}
+                <div class="category">
+                    {{ category }}: <input type="text" name="{{ category }}" autocomplete="off" value="">
+                </div>
+            {% endfor %}
+            <button type="submit">Submit Answers</button>
+        </form>
     {% endif %}
-    <form id="gameForm" action="/submit" method="POST">
-        {% for category in categories %}
-            <div class="category">
-                {{ category }}: <input type="text" name="{{ category }}" autocomplete="off" value="">
-            </div>
-        {% endfor %}
-        <button type="submit">Submit Answers</button>
-        <button type="button" onclick="window.location.href='/new_round'">New Round</button>
-    </form>
     <p><a href="/">Back to Home</a></p>
 
     <script>
-        let timeLeft = 60;
-        const timer = document.getElementById('timer');
-        const form = document.getElementById('gameForm');
-        
-        const countdown = setInterval(() => {
-            timeLeft--;
-            timer.textContent = `Time Left: ${timeLeft}`;
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
-                alert("Time's up! Submitting answers...");
-                form.submit();
-            }
-        }, 1000);
+        {% if not show_results %}
+            let timeLeft = 120;
+            const timer = document.getElementById('timer');
+            const form = document.getElementById('gameForm');
+            
+            const countdown = setInterval(() => {
+                timeLeft--;
+                timer.textContent = `Time Left: ${timeLeft}`;
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    alert("Time's up! Submitting answers...");
+                    form.submit();
+                }
+            }, 1000);
+        {% endif %}
+
+        function startNewRound() {
+            document.getElementById('spinner').classList.add('active');
+            window.location.href = '/new_round';
+        }
     </script>
 </body>
 </html>

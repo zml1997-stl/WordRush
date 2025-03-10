@@ -92,6 +92,25 @@
         .back-link:hover {
             text-decoration: underline;
         }
+        .chat-box {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+        }
+        .chat-messages {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+        .chat-input {
+            width: 70%;
+            padding: 5px;
+        }
     </style>
 </head>
 <body>
@@ -118,10 +137,10 @@
                     {% endif %}
                 </p>
             {% endfor %}
-            <button onclick="window.location.href='/game?mode={{ mode }}&player={{ player_name }}'">Next Round</button>
+            <button onclick="window.location.href='/game?mode={{ mode }}&player={{ player_name }}{% if mode == 'multi' %}&session_id={{ session_id }}{% endif %}'">Next Round</button>
         </div>
     {% else %}
-        <form id="gameForm" method="POST" action="/submit">
+        <form id="gameForm" method="POST" action="{% if mode == 'single' %}/submit{% else %}#{% endif %}">
             <input type="hidden" name="player_name" value="{{ player_name }}">
             <input type="hidden" name="mode" value="{{ mode }}">
             <input type="hidden" name="session_id" value="{{ session_id }}">
@@ -134,36 +153,121 @@
         </form>
     {% endif %}
     <a href="/" class="back-link">Back to Home</a>
+    <div class="chat-box" id="chatBox">
+        <div class="chat-messages" id="chatMessages"></div>
+        <input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
+        <button onclick="sendChat()">Send</button>
+    </div>
 
     <script>
+        const mode = "{{ mode }}";
+        const sessionId = "{{ session_id }}";
+        const playerName = "{{ player_name }}";
+        let ws;
+
         let timeLeft = 120;
         const timer = document.getElementById('timer');
         const form = document.getElementById('gameForm');
+        let countdown;
 
-        const countdown = setInterval(() => {
-            timeLeft--;
-            timer.textContent = `Time Left: ${timeLeft}`;
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
-                alert("Time's up! Submitting answers...");
-                document.getElementById('gameForm').submit();
-            }
-        }, 1000);
+        if (mode === "multi") {
+            ws = new WebSocket(`ws://${window.location.host}/ws/${sessionId}`);
+            ws.onopen = () => {
+                console.log("Connected to WebSocket");
+                document.getElementById('chatBox').style.display = 'block';
+            };
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === "round_results") {
+                    const resultsDiv = document.createElement('div');
+                    resultsDiv.className = 'results';
+                    resultsDiv.innerHTML = `<h2>Round Results</h2><p>Round Score: ${data.round_score}</p>`;
+                    for (const [category, result] of Object.entries(data.results)) {
+                        const p = document.createElement('p');
+                        p.className = result.is_valid ? 'correct' : 'incorrect';
+                        p.innerHTML = `${category}: "${result.answer || '(blank)'}" - ${result.is_valid ? 'Correct' : 'Incorrect'} (${result.points} points)<span class="explanation"> - ${result.explanation}</span>`;
+                        if (!result.is_valid && !result.voted) {
+                            p.innerHTML += ` <button class="vote-button" onclick="vote('${category}')">Vote to Accept</button>`;
+                        }
+                        resultsDiv.appendChild(p);
+                    }
+                    const nextBtn = document.createElement('button');
+                    nextBtn.textContent = 'Next Round';
+                    nextBtn.onclick = () => window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}&session_id=${sessionId}`;
+                    resultsDiv.appendChild(nextBtn);
+                    form.style.display = 'none';
+                    document.body.appendChild(resultsDiv);
+                    document.getElementById('timer').style.display = 'none';
+                    clearInterval(countdown);
+                } else if (data.type === "timer_update") {
+                    timeLeft = data.time_left;
+                    timer.textContent = `Time Left: ${timeLeft}`;
+                    if (!countdown) {
+                        countdown = setInterval(() => {
+                            timeLeft--;
+                            timer.textContent = `Time Left: ${timeLeft}`;
+                            if (timeLeft <= 0) {
+                                clearInterval(countdown);
+                                alert("Time's up! Submitting answers...");
+                                form.submit();
+                            }
+                        }, 1000);
+                    }
+                } else if (data.type === "chat_message") {
+                    const messages = document.getElementById('chatMessages');
+                    const msg = document.createElement('p');
+                    msg.textContent = `${data.player}: ${data.message}`;
+                    messages.appendChild(msg);
+                    messages.scrollTop = messages.scrollHeight;
+                }
+            };
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const formData = new FormData(form);
+                const answers = {};
+                formData.forEach((value, key) => {
+                    if (!['player_name', 'mode', 'session_id'].includes(key)) answers[key] = value;
+                });
+                ws.send(JSON.stringify({ type: "submit_answers", answers: answers }));
+            });
+        } else {
+            countdown = setInterval(() => {
+                timeLeft--;
+                timer.textContent = `Time Left: ${timeLeft}`;
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    alert("Time's up! Submitting answers...");
+                    form.submit();
+                }
+            }, 1000);
+        }
 
         function vote(category) {
-            fetch('/vote', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    category: category,
-                    player_name: "{{ player_name }}",
-                    mode: "{{ mode }}",
-                    session_id: "{{ session_id }}"
-                }),
-            }).then(response => response.json())
-              .then(data => window.location.reload());
+            if (mode === "multi") {
+                ws.send(JSON.stringify({ type: "vote", category: category }));
+            } else {
+                fetch('/vote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        category: category,
+                        player_name: playerName,
+                        mode: mode,
+                        session_id: sessionId
+                    }),
+                }).then(response => response.json())
+                  .then(data => window.location.reload());
+            }
+        }
+
+        function sendChat() {
+            const input = document.getElementById('chatInput');
+            if (ws && input.value) {
+                ws.send(JSON.stringify({ type: "chat_message", message: input.value }));
+                input.value = '';
+            }
         }
     </script>
 </body>

@@ -59,17 +59,22 @@ def submit():
     answers = {category: request.form.get(category, '') for category in round_data["categories"]}
     letter = round_data["letter"]
     
+    # Batch validate all answers
+    category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
+    validation_results = validate_word(category_word_pairs) if category_word_pairs else {}
+    
     results = {}
     for category, answer in answers.items():
         if answer:
-            is_valid, explanation = validate_word(category, letter, answer)
-            print(f"Validation for {category}/{letter}/{answer}: {is_valid}, {explanation}")  # Debug
+            is_valid, explanation = validation_results.get(category, (False, "Validation failed"))
             points = 10 if is_valid else 0
-            uniqueness_bonus = 5 if is_valid and not any(validate_word(category, letter, a)[0] for a in answers.values() if a != answer and a) else 0
+            # Uniqueness check (still calls API, but we'll optimize this next)
+            uniqueness_bonus = 5 if is_valid and not any(
+                validate_word([(c, letter, a)])[c][0] for c, a in answers.items() if a != answer and a
+            ) else 0
         else:
             is_valid, explanation = False, "No answer provided"
-            points = 0
-            uniqueness_bonus = 0
+            points = uniqueness_bonus = 0
         results[category] = {
             "answer": answer,
             "is_valid": is_valid,
@@ -158,7 +163,8 @@ async def add_score(player_name: str, score: int):
 
 @fastapi_app.get("/validate/{category}/{letter}/{word}")
 async def validate(category: str, letter: str, word: str):
-    is_valid, explanation = validate_word(category, letter, word)
+    result = validate_word([(category, letter, word)])
+    is_valid, explanation = result[category]
     return {"category": category, "letter": letter, "word": word, "is_valid": is_valid, "explanation": explanation}
 
 from fastapi.middleware.wsgi import WSGIMiddleware

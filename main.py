@@ -3,9 +3,10 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import create_engine, Column, Integer, String, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from ai_validator import validate_word
+from ai_validator import validate_word, validate_multiplayer_answers
 from flask import Flask, render_template, request, session, redirect, url_for
-from game_logic import generate_round, calculate_score
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from game_logic import generate_round, calculate_score, calculate_multiplayer_scores
 import random
 import string
 from collections import defaultdict
@@ -27,6 +28,7 @@ Base.metadata.create_all(bind=engine)
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
 flask_app.secret_key = "your_secret_key"
+socketio = SocketIO(flask_app, async_mode="gevent")
 
 # Multiplayer session management
 multiplayer_sessions = defaultdict(dict)
@@ -87,6 +89,7 @@ def submit():
         player_data = session_data['players'][session['player_id']]
         answers = {category: request.form.get(category, '') for category in round_data["categories"]}
         player_data['answers'] = answers
+        socketio.emit('answers_submitted', {'player_id': session['player_id'], 'answers': answers}, room=session['session_id'])
         return redirect(url_for('multiplayer_results'))
     else:
         if 'round_data' not in session:
@@ -146,6 +149,23 @@ def submit():
                               show_results=True,
                               mode='single')
 
+@socketio.on('join')
+def handle_join(data):
+    session_id = data['session_id']
+    player_id = session.get('player_id')
+    if session_id in multiplayer_sessions and player_id in multiplayer_sessions[session_id]['players']:
+        join_room(session_id)
+        emit('player_joined', {'player_id': player_id}, room=session_id)
+
+@socketio.on('vote')
+def handle_vote(data):
+    category = data['category']
+    session_id = session.get('session_id')
+    player_id = session.get('player_id')
+    if session_id in multiplayer_sessions and player_id in multiplayer_sessions[session_id]['players']:
+        multiplayer_sessions[session_id]['votes'][category] = True
+        emit('vote_accepted', {'category': category, 'player_id': player_id}, room=session_id)
+
 @flask_app.route('/multiplayer_results')
 def multiplayer_results():
     session_data = multiplayer_sessions[session['session_id']]
@@ -195,52 +215,6 @@ def multiplayer_results():
                           show_results=True,
                           mode='multi')
 
-@flask_app.route('/vote/<category>', methods=['POST'])
-def vote(category):
-    mode = request.args.get('mode', 'single')
-    if mode == 'multi':
-        session_data = multiplayer_sessions[session['session_id']]
-        if 'last_results' in session_data and category in session_data['last_results']:
-            session_data['votes'][category] = True
-            results = session_data['last_results']
-            results[category]["voted"] = True
-            results[category]["is_valid"] = True
-            results[category]["points"] = 10
-            results[category]["explanation"] += " (Accepted by vote)"
-            
-            round_score = sum(result["points"] for result in results.values())
-            for player in session_data['players'].values():
-                player['score'] += round_score - session_data.get('last_round_score', 0)
-            session_data['last_round_score'] = round_score
-        
-        return redirect(url_for('multiplayer_results'))
-    else:
-        if 'last_results' in session and category in session['last_results']:
-            if 'votes' not in session:
-                session['votes'] = {}
-            session['votes'][category] = True
-            session.modified = True
-            
-            results = session['last_results']
-            results[category]["voted"] = True
-            results[category]["is_valid"] = True
-            results[category]["points"] = 10
-            results[category]["explanation"] += " (Accepted by vote)"
-            
-            round_score = sum(result["points"] for result in results.values())
-            session['total_score'] = session.get('total_score', 0) - session.get('last_round_score', 0) + round_score
-            session['last_round_score'] = round_score
-        
-        return render_template('game.html', 
-                              letter=session['round_data']["letter"], 
-                              categories=session['round_data']["categories"], 
-                              total_score=session['total_score'],
-                              results=session['last_results'],
-                              round_score=session['last_round_score'],
-                              session_id=session['session_id'],
-                              show_results=True,
-                              mode='single')
-
 @flask_app.route('/new_round')
 def new_round():
     mode = request.args.get('mode', 'single')
@@ -248,6 +222,7 @@ def new_round():
         session_data = multiplayer_sessions[session['session_id']]
         session_data['round_data'] = generate_round()
         session_data['votes'] = {}
+        socketio.emit('new_round_started', {'letter': session_data['round_data']["letter"], 'categories': session_data['round_data']["categories"]}, room=session['session_id'])
         return redirect(url_for('game', mode='multi'))
     else:
         session['round_data'] = generate_round()

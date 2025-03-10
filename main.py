@@ -112,7 +112,7 @@ def vote(category):
         if 'votes' not in session:
             session['votes'] = {}
         session['votes'][category] = True
-            session.modified = True
+        session.modified = True
         
         results = session['last_results']
         results[category]["voted"] = True

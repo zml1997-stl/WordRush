@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, Integer, String, MetaData
@@ -68,6 +68,13 @@ async def game(request: Request, mode: str = "single"):
             "session_id": generate_session_id(),
             "mode": mode
         })
+
+@app.post("/submit")
+async def submit(request: Request):
+    form_data = await request.form()
+    answers = {key: value for key, value in form_data.items()}
+    # Process answers and calculate scores
+    return {"status": "success", "answers": answers}
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):

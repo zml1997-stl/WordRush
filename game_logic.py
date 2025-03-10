@@ -39,3 +39,22 @@ def calculate_score(answers, round_data):
             if not any(validate_word(category, letter, a) for a in answers.values() if a != answer and a):
                 score += 5  # Bonus for unique answer
     return score
+
+def calculate_multiplayer_scores(players_answers, round_data):
+    """
+    Calculate scores for all players in a multiplayer round.
+    Returns a dictionary mapping player IDs to their scores.
+    """
+    letter = round_data["letter"]
+    scores = {}
+    all_answers = [answer for answers in players_answers.values() for answer in answers.values() if answer]
+    
+    for player_id, answers in players_answers.items():
+        score = 0
+        for category, answer in answers.items():
+            if answer and validate_word(category, letter, answer):
+                score += 10  # Valid answer
+                if not any(a == answer for a in all_answers if a != answer):
+                    score += 5  # Bonus for unique answer
+        scores[player_id] = score
+    return scores

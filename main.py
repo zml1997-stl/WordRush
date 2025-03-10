@@ -117,8 +117,20 @@ async def submit(request: Request):
     db.commit()
     db.close()
 
-    return {"status": "success", "results": results, "round_score": round_score, "total_score": total_score}
-
+    # Render the game.html template with the results
+    return templates.TemplateResponse("game.html", {
+        "request": request,
+        "letter": letter,
+        "categories": round_data["categories"],
+        "total_score": total_score,
+        "session_id": session_id,
+        "mode": mode,
+        "player_name": player_name,
+        "show_results": True,
+        "results": results,
+        "round_score": round_score
+    })
+    
 @app.post("/vote")
 async def vote(request: Request):
     form_data = await request.json()

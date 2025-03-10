@@ -27,8 +27,6 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-
-# Multiplayer session management
 multiplayer_sessions = defaultdict(dict)
 
 def generate_session_id():
@@ -43,10 +41,7 @@ async def home(request: Request):
 
 @app.get("/multiplayer")
 async def multiplayer(request: Request, player: str = "Player"):
-    return templates.TemplateResponse("multiplayer.html", {
-        "request": request,
-        "player_name": player
-    })
+    return templates.TemplateResponse("multiplayer.html", {"request": request, "player_name": player})
 
 @app.get("/game")
 async def game(
@@ -59,19 +54,22 @@ async def game(
     if mode == "multi":
         if session_id and session_id in multiplayer_sessions:
             session_data = multiplayer_sessions[session_id]
+            total_score = sum(p['score'] for p in session_data['players'].values()) if session_data['players'] else 0
         else:
             session_id = generate_session_id()
             multiplayer_sessions[session_id] = {
                 'players': {},
                 'round_data': generate_round(),
-                'votes': {}
+                'votes': {},
+                'time_left': 120
             }
             session_data = multiplayer_sessions[session_id]
+            total_score = 0
         return templates.TemplateResponse("game.html", {
             "request": request,
             "letter": session_data['round_data']["letter"],
             "categories": session_data['round_data']["categories"],
-            "total_score": 0,
+            "total_score": total_score,
             "session_id": session_id,
             "mode": mode,
             "player_name": player,
@@ -100,7 +98,7 @@ async def submit(request: Request):
 
     if mode == "multi":
         session_data = multiplayer_sessions.get(session_id, {})
-        round_data = session_data.get("round_data", {})
+        round_data = session_data.get("round_data", generate_round())
     else:
         round_data = generate_round()
 
@@ -126,7 +124,7 @@ async def submit(request: Request):
         }
 
     round_score = sum(result["points"] for result in results.values())
-    total_score = round_score  # For single-player mode, total_score is the same as round_score
+    total_score = round_score  # For single-player mode
 
     db = SessionLocal()
     new_score = Score(player_name=player_name, score=round_score)
@@ -134,7 +132,6 @@ async def submit(request: Request):
     db.commit()
     db.close()
 
-    # Render the game.html template with the results
     return templates.TemplateResponse("game.html", {
         "request": request,
         "letter": letter,
@@ -147,7 +144,7 @@ async def submit(request: Request):
         "results": results,
         "round_score": round_score
     })
-    
+
 @app.post("/vote")
 async def vote(request: Request):
     form_data = await request.json()
@@ -161,28 +158,30 @@ async def vote(request: Request):
         if session_data:
             session_data['votes'][category] = True
             return {"status": "success", "message": f"Vote for {category} accepted by {player_name}"}
-    else:
-        return {"status": "success", "message": f"Vote for {category} accepted by {player_name}"}
+    return {"status": "success", "message": f"Vote for {category} accepted by {player_name}"}
 
 @app.websocket("/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     player_id = generate_player_id()
-
-    # Ensure the session exists and has a 'players' key
     if session_id not in multiplayer_sessions:
         multiplayer_sessions[session_id] = {
             'players': {},
             'round_data': generate_round(),
-            'votes': {}
+            'votes': {},
+            'time_left': 120
         }
-
     multiplayer_sessions[session_id]['players'][player_id] = {
         'score': 0,
-        'answers': {},
-        'websocket': websocket
+        'answers': None,
+        'websocket': websocket,
+        'name': f"Player_{player_id[:3]}"  # Simple name for chat
     }
-
+    # Sync timer for new player
+    await websocket.send_text(json.dumps({
+        'type': 'timer_update',
+        'time_left': multiplayer_sessions[session_id]['time_left']
+    }))
     try:
         while True:
             data = await websocket.receive_text()
@@ -190,14 +189,67 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
             if message['type'] == 'submit_answers':
                 answers = message['answers']
                 multiplayer_sessions[session_id]['players'][player_id]['answers'] = answers
-                await broadcast_answers(session_id, player_id, answers)
+                if all(p['answers'] is not None for p in multiplayer_sessions[session_id]['players'].values()):
+                    round_data = multiplayer_sessions[session_id]['round_data']
+                    players_answers = {pid: p['answers'] for pid, p in multiplayer_sessions[session_id]['players'].items()}
+                    validation_results = validate_multiplayer_answers(players_answers, round_data["letter"])
+                    scores = calculate_multiplayer_scores(players_answers, round_data)
+                    for pid, player in multiplayer_sessions[session_id]['players'].items():
+                        player_score = scores[pid]
+                        player['score'] += player_score
+                        await player['websocket'].send_text(json.dumps({
+                            'type': 'round_results',
+                            'results': validation_results[pid],
+                            'round_score': player_score,
+                            'total_score': player['score']
+                        }))
+                    for player in multiplayer_sessions[session_id]['players'].values():
+                        player['answers'] = None
+                    multiplayer_sessions[session_id]['round_data'] = generate_round()
+                    multiplayer_sessions[session_id]['time_left'] = 120
             elif message['type'] == 'vote':
                 category = message['category']
                 multiplayer_sessions[session_id]['votes'][category] = True
                 await broadcast_vote(session_id, player_id, category)
+            elif message['type'] == 'chat_message':
+                for player in multiplayer_sessions[session_id]['players'].values():
+                    await player['websocket'].send_text(json.dumps({
+                        'type': 'chat_message',
+                        'player': multiplayer_sessions[session_id]['players'][player_id]['name'],
+                        'message': message['message']
+                    }))
+            # Simplified timer sync (full sync would require a separate loop)
+            multiplayer_sessions[session_id]['time_left'] -= 1
+            if multiplayer_sessions[session_id]['time_left'] >= 0:
+                for player in multiplayer_sessions[session_id]['players'].values():
+                    await player['websocket'].send_text(json.dumps({
+                        'type': 'timer_update',
+                        'time_left': multiplayer_sessions[session_id]['time_left']
+                    }))
+            if multiplayer_sessions[session_id]['time_left'] <= 0:
+                if all(p['answers'] is not None for p in multiplayer_sessions[session_id]['players'].values()):
+                    round_data = multiplayer_sessions[session_id]['round_data']
+                    players_answers = {pid: p['answers'] for pid, p in multiplayer_sessions[session_id]['players'].items()}
+                    validation_results = validate_multiplayer_answers(players_answers, round_data["letter"])
+                    scores = calculate_multiplayer_scores(players_answers, round_data)
+                    for pid, player in multiplayer_sessions[session_id]['players'].items():
+                        player_score = scores[pid]
+                        player['score'] += player_score
+                        await player['websocket'].send_text(json.dumps({
+                            'type': 'round_results',
+                            'results': validation_results[pid],
+                            'round_score': player_score,
+                            'total_score': player['score']
+                        }))
+                    for player in multiplayer_sessions[session_id]['players'].values():
+                        player['answers'] = None
+                    multiplayer_sessions[session_id]['round_data'] = generate_round()
+                    multiplayer_sessions[session_id]['time_left'] = 120
     except WebSocketDisconnect:
         del multiplayer_sessions[session_id]['players'][player_id]
         await broadcast_player_left(session_id, player_id)
+        if not multiplayer_sessions[session_id]['players']:
+            del multiplayer_sessions[session_id]
 
 async def broadcast_answers(session_id: str, player_id: str, answers: dict):
     for player in multiplayer_sessions[session_id]['players'].values():
@@ -239,5 +291,12 @@ async def add_score(player_name: str, score: int):
 @app.get("/validate/{category}/{letter}/{word}")
 async def validate(category: str, letter: str, word: str):
     result = validate_word([(category, letter, word)])
-    is_valid, explanation, _ = result[category]  # Ignore is_unique for this endpoint
+    is_valid, explanation, _ = result[category]
     return {"category": category, "letter": letter, "word": word, "is_valid": is_valid, "explanation": explanation}
+
+@app.get("/leaderboard", response_class=HTMLResponse)
+async def leaderboard(request: Request):
+    db = SessionLocal()
+    scores = db.query(Score).order_by(Score.score.desc()).limit(10).all()
+    db.close()
+    return templates.TemplateResponse("leaderboard.html", {"request": request, "scores": scores})

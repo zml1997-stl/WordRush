@@ -7,6 +7,7 @@ from ai_validator import validate_word
 from flask import Flask, render_template, request, session
 from game_logic import generate_round, calculate_score
 import random
+import string
 
 # SQLite database setup
 DATABASE_URL = "sqlite:///wordrush.db"
@@ -28,7 +29,11 @@ Base.metadata.create_all(bind=engine)
 # Initialize FastAPI and Flask
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
-flask_app.secret_key = "your_secret_key"  # Needed for session; replace with a secure key
+flask_app.secret_key = "your_secret_key"  # Replace with a secure key
+
+def generate_session_id():
+    """Generate a 4-letter session ID for multiplayer."""
+    return ''.join(random.choices(string.ascii_uppercase, k=4))
 
 # Flask routes for rendering templates
 @flask_app.route('/')
@@ -40,46 +45,69 @@ def game():
     if 'round_data' not in session:
         session['round_data'] = generate_round()
         session['total_score'] = 0
+        session['session_id'] = generate_session_id()
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
                           categories=session['round_data']["categories"], 
-                          total_score=session.get('total_score', 0))
+                          total_score=session.get('total_score', 0),
+                          session_id=session['session_id'])
 
 @flask_app.route('/submit', methods=['POST'])
 def submit():
     if 'round_data' not in session:
         session['round_data'] = generate_round()
         session['total_score'] = 0
+        session['session_id'] = generate_session_id()
     
-    answers = {key: value for key, value in request.form.items() if value}
     round_data = session['round_data']
-    score = calculate_score(answers, round_data)
+    answers = {category: request.form.get(category, '') for category in round_data["categories"]}
+    letter = round_data["letter"]
     
-    # Update total score
-    session['total_score'] = session.get('total_score', 0) + score
+    # Validate answers and assign points
+    results = {}
+    for category, answer in answers.items():
+        if answer:
+            is_valid = validate_word(category, letter, answer)
+            points = 10 if is_valid else 0
+        else:
+            is_valid = False
+            points = 0
+        results[category] = {"answer": answer, "is_valid": is_valid, "points": points}
     
-    # Save score to database (using placeholder player name)
+    # Calculate total round score
+    round_score = sum(result["points"] for result in results.values())
+    session['total_score'] = session.get('total_score', 0) + round_score
+    
+    # Save score to database
     db = SessionLocal()
-    new_score = Score(player_name="Player1", score=score)
+    new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
     db.add(new_score)
     db.commit()
     db.close()
     
-    # Keep the same round data for now, show score
+    # Render results page
     return render_template('game.html', 
-                          letter=round_data["letter"], 
+                          letter=letter, 
                           categories=round_data["categories"], 
                           total_score=session['total_score'],
-                          message=f"Round Score: {score} points! Total: {session['total_score']} points.")
+                          results=results,
+                          round_score=round_score,
+                          session_id=session['session_id'],
+                          show_results=True)
 
 @flask_app.route('/new_round')
 def new_round():
-    session['round_data'] = generate_round()
-    session.modified = True  # Ensure session updates
+    # Show loading state while generating new round
+    session['is_loading'] = True
+    session.modified = True
+    round_data = generate_round()  # This may take time due to Gemini checks
+    session['round_data'] = round_data
+    session['is_loading'] = False
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
                           categories=session['round_data']["categories"], 
-                          total_score=session.get('total_score', 0))
+                          total_score=session.get('total_score', 0),
+                          session_id=session['session_id'])
 
 # FastAPI endpoints
 @fastapi_app.get("/test")

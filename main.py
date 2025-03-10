@@ -4,9 +4,9 @@ from sqlalchemy import create_engine, Column, Integer, String, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from ai_validator import validate_word
-from flask import Flask, render_template, request
-import random
+from flask import Flask, render_template, request, session
 from game_logic import generate_round, calculate_score
+import random
 
 # SQLite database setup
 DATABASE_URL = "sqlite:///wordrush.db"
@@ -28,6 +28,7 @@ Base.metadata.create_all(bind=engine)
 # Initialize FastAPI and Flask
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
+flask_app.secret_key = "your_secret_key"  # Needed for session; replace with a secure key
 
 # Flask routes for rendering templates
 @flask_app.route('/')
@@ -36,24 +37,49 @@ def home():
 
 @flask_app.route('/game')
 def game():
-    round_data = generate_round()
-    return render_template('game.html', letter=round_data["letter"], categories=round_data["categories"])
+    if 'round_data' not in session:
+        session['round_data'] = generate_round()
+        session['total_score'] = 0
+    return render_template('game.html', 
+                          letter=session['round_data']["letter"], 
+                          categories=session['round_data']["categories"], 
+                          total_score=session.get('total_score', 0))
 
 @flask_app.route('/submit', methods=['POST'])
 def submit():
+    if 'round_data' not in session:
+        session['round_data'] = generate_round()
+        session['total_score'] = 0
+    
     answers = {key: value for key, value in request.form.items() if value}
-    round_data = generate_round()  # Generate new round data for next game
+    round_data = session['round_data']
     score = calculate_score(answers, round_data)
     
-    # Save score (simplified, using a placeholder player name)
+    # Update total score
+    session['total_score'] = session.get('total_score', 0) + score
+    
+    # Save score to database (using placeholder player name)
     db = SessionLocal()
     new_score = Score(player_name="Player1", score=score)
     db.add(new_score)
     db.commit()
     db.close()
     
-    return render_template('game.html', letter=round_data["letter"], categories=round_data["categories"], 
-                          message=f"Score: {score} points! New round started.")
+    # Keep the same round data for now, show score
+    return render_template('game.html', 
+                          letter=round_data["letter"], 
+                          categories=round_data["categories"], 
+                          total_score=session['total_score'],
+                          message=f"Round Score: {score} points! Total: {session['total_score']} points.")
+
+@flask_app.route('/new_round')
+def new_round():
+    session['round_data'] = generate_round()
+    session.modified = True  # Ensure session updates
+    return render_template('game.html', 
+                          letter=session['round_data']["letter"], 
+                          categories=session['round_data']["categories"], 
+                          total_score=session.get('total_score', 0))
 
 # FastAPI endpoints
 @fastapi_app.get("/test")

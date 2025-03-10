@@ -83,3 +83,13 @@ def validate_multiplayer_answers(players_answers: dict[str, dict[str, str]], let
         player_results = validate_word(category_word_pairs) if category_word_pairs else {}
         validation_results[player_id] = player_results
     return validation_results
+
+def handle_vote(category: str, session_id: str, player_id: str, multiplayer_sessions: dict):
+    """
+    Handle voting on a category in a multiplayer session.
+    Updates the session data to reflect the vote.
+    """
+    if session_id in multiplayer_sessions and player_id in multiplayer_sessions[session_id]['players']:
+        multiplayer_sessions[session_id]['votes'][category] = True
+        return True
+    return False

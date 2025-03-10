@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from ai_validator import validate_word
 from flask import Flask, render_template, request
 import random
+from game_logic import generate_round, calculate_score
 
 # SQLite database setup
 DATABASE_URL = "sqlite:///wordrush.db"
@@ -28,10 +29,6 @@ Base.metadata.create_all(bind=engine)
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
 
-# Sample categories and letters for the game
-CATEGORIES = ["Fruit", "Country", "Animal", "Movie"]
-LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
 # Flask routes for rendering templates
 @flask_app.route('/')
 def home():
@@ -39,9 +36,24 @@ def home():
 
 @flask_app.route('/game')
 def game():
-    letter = random.choice(LETTERS)
-    categories = random.sample(CATEGORIES, 3)  # Pick 3 random categories
-    return render_template('game.html', letter=letter, categories=categories)
+    round_data = generate_round()
+    return render_template('game.html', letter=round_data["letter"], categories=round_data["categories"])
+
+@flask_app.route('/submit', methods=['POST'])
+def submit():
+    answers = {key: value for key, value in request.form.items() if value}
+    round_data = generate_round()  # Generate new round data for next game
+    score = calculate_score(answers, round_data)
+    
+    # Save score (simplified, using a placeholder player name)
+    db = SessionLocal()
+    new_score = Score(player_name="Player1", score=score)
+    db.add(new_score)
+    db.commit()
+    db.close()
+    
+    return render_template('game.html', letter=round_data["letter"], categories=round_data["categories"], 
+                          message=f"Score: {score} points! New round started.")
 
 # FastAPI endpoints
 @fastapi_app.get("/test")

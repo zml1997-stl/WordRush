@@ -118,7 +118,7 @@
                     {% endif %}
                 </p>
             {% endfor %}
-            <button onclick="window.location.href='/new_round?mode=single&player={{ player_name }}'">Next Round</button>
+            <button onclick="window.location.href='/new_round?mode={{ mode }}&player={{ player_name }}'">Next Round</button>
         </div>
     {% else %}
         <form id="gameForm" onsubmit="submitAnswers(event)">
@@ -147,7 +147,7 @@
             if (timeLeft <= 0) {
                 clearInterval(countdown);
                 alert("Time's up! Submitting answers...");
-                form.submit();
+                submitAnswers(event);
             }
         }, 1000);
 
@@ -171,7 +171,7 @@
                 }),
             }).then(response => response.json())
               .then(data => {
-                  window.location.href = `/game?mode=single&player=${encodeURIComponent(playerName)}&show_results=true`;
+                  window.location.href = `/game?mode={{ mode }}&player=${encodeURIComponent(playerName)}&show_results=true`;
               });
         }
 

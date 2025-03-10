@@ -11,8 +11,8 @@
             color: white;
             text-align: center;
             margin: 0;
-            padding: 0;
-            height: 100vh;
+            padding: 20px;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -23,14 +23,18 @@
             margin-bottom: 20px;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
         }
-        p {
-            font-size: 1.2rem;
-            margin-bottom: 40px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
-        }
         .mode-buttons {
             display: flex;
             gap: 20px;
+            margin-top: 20px;
+        }
+        input {
+            padding: 10px;
+            width: 250px;
+            border: 2px solid #6a11cb;
+            border-radius: 5px;
+            font-size: 1rem;
+            margin-bottom: 20px;
         }
         button {
             padding: 15px 30px;
@@ -56,9 +60,30 @@
 <body>
     <h1>Welcome to WordRush!</h1>
     <p>A fast-paced word challenge game powered by AI.</p>
+    <input type="text" id="playerName" placeholder="Enter your name" required>
     <div class="mode-buttons">
-        <button onclick="window.location.href='/game?mode=single'">Single Player</button>
-        <button onclick="window.location.href='/game?mode=multi'">Multiplayer</button>
+        <button onclick="startSinglePlayer()">Single Player</button>
+        <button onclick="startMultiplayer()">Multiplayer</button>
     </div>
+
+    <script>
+        function startSinglePlayer() {
+            const playerName = document.getElementById('playerName').value;
+            if (!playerName) {
+                alert("Please enter your name!");
+                return;
+            }
+            window.location.href = `/game?mode=single&player=${encodeURIComponent(playerName)}`;
+        }
+
+        function startMultiplayer() {
+            const playerName = document.getElementById('playerName').value;
+            if (!playerName) {
+                alert("Please enter your name!");
+                return;
+            }
+            window.location.href = `/multiplayer?player=${encodeURIComponent(playerName)}`;
+        }
+    </script>
 </body>
 </html>

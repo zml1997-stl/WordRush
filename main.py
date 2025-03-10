@@ -9,33 +9,27 @@ from game_logic import generate_round, calculate_score
 import random
 import string
 
-# SQLite database setup
 DATABASE_URL = "sqlite:///wordrush.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 metadata = MetaData()
 
-# Define Scores table
 class Score(Base):
     __tablename__ = "scores"
     id = Column(Integer, primary_key=True, index=True)
     player_name = Column(String, index=True)
     score = Column(Integer)
 
-# Create the table
 Base.metadata.create_all(bind=engine)
 
-# Initialize FastAPI and Flask
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
 flask_app.secret_key = "your_secret_key"  # Replace with a secure key
 
 def generate_session_id():
-    """Generate a 4-letter session ID for multiplayer."""
     return ''.join(random.choices(string.ascii_uppercase, k=4))
 
-# Flask routes for rendering templates
 @flask_app.route('/')
 def home():
     return render_template('index.html')
@@ -63,37 +57,27 @@ def submit():
     answers = {category: request.form.get(category, '') for category in round_data["categories"]}
     letter = round_data["letter"]
     
-    # Validate answers and assign points
     results = {}
     for category, answer in answers.items():
         if answer:
             is_valid = validate_word(category, letter, answer)
             points = 10 if is_valid else 0
-            # Check if no valid answer exists
-            test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
-            if not is_valid and not any(validate_word(category, letter, test_word) for test_word in test_words):
-                points = 10  # Award points if no valid answer exists
+            uniqueness_bonus = 5 if is_valid and not any(validate_word(category, letter, a) for a in answers.values() if a != answer and a) else 0
         else:
             is_valid = False
             points = 0
-            # Check if no valid answer exists for blank
-            test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
-            if not any(validate_word(category, letter, test_word) for test_word in test_words):
-                points = 10  # Award points if no valid answer exists
-        results[category] = {"answer": answer, "is_valid": is_valid, "points": points}
+            uniqueness_bonus = 0
+        results[category] = {"answer": answer, "is_valid": is_valid, "points": points + uniqueness_bonus}
     
-    # Calculate total round score
     round_score = sum(result["points"] for result in results.values())
     session['total_score'] = session.get('total_score', 0) + round_score
     
-    # Save score to database
     db = SessionLocal()
     new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
     db.add(new_score)
     db.commit()
     db.close()
     
-    # Render results page
     return render_template('game.html', 
                           letter=letter, 
                           categories=round_data["categories"], 
@@ -113,7 +97,6 @@ def new_round():
                           total_score=session.get('total_score', 0),
                           session_id=session['session_id'])
 
-# FastAPI endpoints
 @fastapi_app.get("/test")
 async def test_endpoint():
     return {"status": "success", "detail": "Test endpoint is working!"}
@@ -133,9 +116,7 @@ async def validate(category: str, letter: str, word: str):
     is_valid = validate_word(category, letter, word)
     return {"category": category, "letter": letter, "word": word, "is_valid": is_valid}
 
-# Combine Flask and FastAPI
 from fastapi.middleware.wsgi import WSGIMiddleware
 fastapi_app.mount("/", WSGIMiddleware(flask_app))
 
-# For Heroku, we need to expose the FastAPI app as 'app'
 app = fastapi_app

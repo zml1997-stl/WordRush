@@ -91,18 +91,19 @@ async def game(
 @app.post("/submit", response_class=HTMLResponse)
 async def submit(request: Request):
     form_data = await request.form()
-    answers = {k: v for k, v in form_data.items() if k not in ["player_name", "mode", "session_id"]}
+    answers = {k: v for k, v in form_data.items() if k not in ["player_name", "mode", "session_id", "letter", "categories"]}
     player_name = form_data.get("player_name", "Player")
     mode = form_data.get("mode", "single")
     session_id = form_data.get("session_id", "")
+    letter = form_data.get("letter", "")
+    categories = [form_data.getlist("categories")[i] for i in range(len(form_data.getlist("categories")))]
 
     if mode == "multi":
         session_data = multiplayer_sessions.get(session_id, {})
         round_data = session_data.get("round_data", generate_round())
     else:
-        round_data = generate_round()
+        round_data = {"letter": letter, "categories": categories}
 
-    letter = round_data["letter"]
     category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
     validation_results = validate_word(category_word_pairs) if category_word_pairs else {}
 
@@ -135,7 +136,7 @@ async def submit(request: Request):
     return templates.TemplateResponse("game.html", {
         "request": request,
         "letter": letter,
-        "categories": round_data["categories"],
+        "categories": categories,
         "total_score": total_score,
         "session_id": session_id,
         "mode": mode,

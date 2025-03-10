@@ -1,7 +1,7 @@
 import random
 from ai_validator import validate_word
 
-# 100 sample categories
+# 100 categories
 CATEGORIES = [
     "Fruit", "Country", "Animal", "Movie", "Color", "Sport", "City", "Food", "Book", "Clothing",
     "Vehicle", "Plant", "Occupation", "Musical Instrument", "Furniture", "Drink", "Dessert", 
@@ -19,34 +19,31 @@ CATEGORIES = [
 ]
 LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-def has_valid_answer(category, letter):
-    """Check if a category has at least one valid answer starting with the letter using Gemini."""
-    # Use a simple test word or query Gemini for existence
-    test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]  # Basic heuristic
-    for test_word in test_words:
-        if validate_word(category, letter, test_word):
-            return True
-    # Fallback: ask Gemini directly if any word exists (simplified for now)
-    return validate_word(category, letter, f"{letter.lower()}test")  # Placeholder
-
 def generate_round():
-    """Generate a new game round with a random letter and 10 valid categories."""
-    while True:
-        letter = random.choice(LETTERS)
-        categories = random.sample(CATEGORIES, 10)  # Pick 10 unique categories
-        # Verify each category has a valid answer
-        if all(has_valid_answer(category, letter) for category in categories):
-            return {"letter": letter, "categories": categories}
+    """Generate a new game round with a random letter and 10 categories."""
+    letter = random.choice(LETTERS)
+    categories = random.sample(CATEGORIES, 10)  # Pick 10 unique categories
+    return {"letter": letter, "categories": categories}
 
 def calculate_score(answers, round_data):
-    """Calculate score based on validated answers and uniqueness."""
+    """Calculate score, awarding full points if no valid answer exists."""
     score = 0
     letter = round_data["letter"]
     for category, answer in answers.items():
-        if answer:  # Only validate if an answer is provided
+        if answer:
             if validate_word(category, letter, answer):
-                score += 10  # Base points for valid answer
+                score += 10  # Valid answer
                 # Check uniqueness among non-blank answers
                 if not any(validate_word(category, letter, a) for a in answers.values() if a != answer and a):
                     score += 5  # Bonus for unique answer
+            else:
+                # Check if any valid answer exists; if not, award points
+                test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
+                if not any(validate_word(category, letter, test_word) for test_word in test_words):
+                    score += 10  # No valid answer exists, award full points
+        else:
+            # Blank answer: award points if no valid answer exists
+            test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
+            if not any(validate_word(category, letter, test_word) for test_word in test_words):
+                score += 10  # No valid answer exists, award full points
     return score

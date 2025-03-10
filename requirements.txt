@@ -6,3 +6,5 @@ requests
 jinja2
 websockets
 flask
+flask-socketio
+python-socketio

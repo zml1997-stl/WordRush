@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form, Query
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, Integer, String, MetaData
@@ -49,18 +49,28 @@ async def multiplayer(request: Request, player: str = "Player"):
     })
 
 @app.get("/game")
-async def game(request: Request, mode: str = "single", player: str = "Player", show_results: bool = False):
+async def game(
+    request: Request,
+    mode: str = "single",
+    player: str = "Player",
+    show_results: bool = False,
+    session_id: str = Query(None)
+):
     if mode == "multi":
-        session_id = generate_session_id()
-        multiplayer_sessions[session_id] = {
-            'players': {},
-            'round_data': generate_round(),
-            'votes': {}
-        }
+        if session_id and session_id in multiplayer_sessions:
+            session_data = multiplayer_sessions[session_id]
+        else:
+            session_id = generate_session_id()
+            multiplayer_sessions[session_id] = {
+                'players': {},
+                'round_data': generate_round(),
+                'votes': {}
+            }
+            session_data = multiplayer_sessions[session_id]
         return templates.TemplateResponse("game.html", {
             "request": request,
-            "letter": multiplayer_sessions[session_id]['round_data']["letter"],
-            "categories": multiplayer_sessions[session_id]['round_data']["categories"],
+            "letter": session_data['round_data']["letter"],
+            "categories": session_data['round_data']["categories"],
             "total_score": 0,
             "session_id": session_id,
             "mode": mode,
@@ -80,10 +90,10 @@ async def game(request: Request, mode: str = "single", player: str = "Player", s
             "show_results": show_results
         })
 
-@app.post("/submit")
+@app.post("/submit", response_class=HTMLResponse)
 async def submit(request: Request):
-    form_data = await request.json()
-    answers = form_data.get("answers", {})
+    form_data = await request.form()
+    answers = {k: v for k, v in form_data.items() if k not in ["player_name", "mode", "session_id"]}
     player_name = form_data.get("player_name", "Player")
     mode = form_data.get("mode", "single")
     session_id = form_data.get("session_id", "")

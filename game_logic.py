@@ -21,7 +21,7 @@ CATEGORIES = [
     "Things Found in a Farmhouse", "Things in the Wilderness", "Tools Found in a Workshop", "Items Found in a Gym",
     "Things That Are Circular", "Things That Are Square", "Things That Are Triangular", "Modes of Entertainment"
 ]
-LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+LETTERS = list("ABCDEFGHIJKLMNOPRSTW")
 
 def generate_round():
     """Generate a new game round with a random letter and 10 categories."""

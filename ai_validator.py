@@ -69,3 +69,17 @@ def validate_word(category_word_pairs: list[tuple[str, str, str]]) -> dict[str, 
     except requests.RequestException as e:
         print(f"Error calling Gemini API: {e}")
         return {category: (False, f"API error: {str(e)}", True) for category, _, _ in category_word_pairs}
+
+def validate_multiplayer_answers(players_answers: dict[str, dict[str, str]], letter: str) -> dict[str, dict[str, tuple[bool, str, bool]]]:
+    """
+    Validate answers for all players in a multiplayer round.
+    Returns a nested dictionary mapping player IDs to their validation results.
+    """
+    validation_results = {}
+    all_answers = [answer for answers in players_answers.values() for answer in answers.values() if answer]
+    
+    for player_id, answers in players_answers.items():
+        category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
+        player_results = validate_word(category_word_pairs) if category_word_pairs else {}
+        validation_results[player_id] = player_results
+    return validation_results

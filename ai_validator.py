@@ -43,15 +43,16 @@ def validate_word(category_word_pairs: list[tuple[str, str, str]]) -> dict[str, 
 
         if "candidates" in result and result["candidates"]:
             text_response = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            # Replace newlines with semicolons and clean up
+            text_response = text_response.replace("\n", "; ").strip()
             print(f"Raw Gemini response: {text_response}")
-            # Split by semicolon and clean up
             response_lines = [line.strip() for line in text_response.split(";") if line.strip()]
             for line in response_lines:
                 if ":" in line:
                     category, resp = line.split(":", 1)
                     category = category.strip()
                     parts = resp.strip().split(". ", 2)
-                    if len(parts) >= 2:  # Ensure at least yes/no and explanation
+                    if len(parts) >= 2:  # Ensure yes/no and explanation
                         is_valid = parts[0].strip().lower() == "yes"
                         explanation = parts[1].strip()
                         is_unique = parts[2].strip().lower() == "unique" if len(parts) > 2 else True

@@ -41,6 +41,13 @@ def generate_player_id():
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/multiplayer")
+async def multiplayer(request: Request, player: str = "Player"):
+    return templates.TemplateResponse("multiplayer.html", {
+        "request": request,
+        "player_name": player
+    })
+
 @app.get("/game")
 async def game(request: Request, mode: str = "single", player: str = "Player", show_results: bool = False):
     if mode == "multi":

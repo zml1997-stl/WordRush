@@ -55,29 +55,55 @@
             transform: translateY(0);
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         }
+        #sessionCodeDisplay {
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
     <h1>Multiplayer Lobby</h1>
     <p>Welcome, <strong>{{ player_name }}</strong>!</p>
+    <div id="sessionCodeDisplay">Session Code: <span id="sessionCode"></span></div>
     <div class="lobby-options">
         <button onclick="startNewGame()">Start New Game</button>
         <button onclick="joinGame()">Join Existing Game</button>
     </div>
 
     <script>
+        const playerName = "{{ player_name }}";
+        let sessionId = null;
+
         function startNewGame() {
-            const playerName = "{{ player_name }}";
-            window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}`;
+            fetch('/game?mode=multi&player=' + encodeURIComponent(playerName), {
+                method: 'GET'
+            })
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newSessionId = doc.querySelector('input[name="session_id"]').value;
+                sessionId = newSessionId;
+                document.getElementById('sessionCode').textContent = sessionId;
+                window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}&session_id=${newSessionId}`;
+            });
         }
 
         function joinGame() {
-            const playerName = "{{ player_name }}";
             const sessionCode = prompt("Enter the session code:");
             if (sessionCode) {
                 window.location.href = `/game?mode=multi&player=${encodeURIComponent(playerName)}&session_id=${sessionCode}`;
             }
         }
+
+        // Display session code if already in a session
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            sessionId = urlParams.get('session_id');
+            if (sessionId) {
+                document.getElementById('sessionCode').textContent = sessionId;
+            }
+        });
     </script>
 </body>
 </html>

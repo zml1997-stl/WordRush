@@ -25,7 +25,7 @@ Base.metadata.create_all(bind=engine)
 
 fastapi_app = FastAPI()
 flask_app = Flask(__name__)
-flask_app.secret_key = "your_secret_key"  # Replace with a secure key
+flask_app.secret_key = "your_secret_key"
 
 def generate_session_id():
     return ''.join(random.choices(string.ascii_uppercase, k=4))
@@ -40,6 +40,7 @@ def game():
         session['round_data'] = generate_round()
         session['total_score'] = 0
         session['session_id'] = generate_session_id()
+        session['votes'] = {}  # Store votes per round
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
                           categories=session['round_data']["categories"], 
@@ -52,6 +53,7 @@ def submit():
         session['round_data'] = generate_round()
         session['total_score'] = 0
         session['session_id'] = generate_session_id()
+        session['votes'] = {}
     
     round_data = session['round_data']
     answers = {category: request.form.get(category, '') for category in round_data["categories"]}
@@ -60,17 +62,31 @@ def submit():
     results = {}
     for category, answer in answers.items():
         if answer:
-            is_valid = validate_word(category, letter, answer)
+            is_valid, explanation = validate_word(category, letter, answer)
             points = 10 if is_valid else 0
-            uniqueness_bonus = 5 if is_valid and not any(validate_word(category, letter, a) for a in answers.values() if a != answer and a) else 0
+            uniqueness_bonus = 5 if is_valid and not any(validate_word(category, letter, a)[0] for a in answers.values() if a != answer and a) else 0
         else:
-            is_valid = False
+            is_valid, explanation = False, "No answer provided"
             points = 0
             uniqueness_bonus = 0
-        results[category] = {"answer": answer, "is_valid": is_valid, "points": points + uniqueness_bonus}
+        results[category] = {
+            "answer": answer,
+            "is_valid": is_valid,
+            "points": points + uniqueness_bonus,
+            "explanation": explanation,
+            "voted": session.get('votes', {}).get(category, False)
+        }
+    
+    # Apply votes
+    for category, result in results.items():
+        if result["voted"]:
+            result["is_valid"] = True
+            result["points"] = 10  # Base points only, no uniqueness for voted answers
+            result["explanation"] += " (Accepted by vote)"
     
     round_score = sum(result["points"] for result in results.values())
     session['total_score'] = session.get('total_score', 0) + round_score
+    session['last_results'] = results  # Store for voting
     
     db = SessionLocal()
     new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
@@ -87,9 +103,38 @@ def submit():
                           session_id=session['session_id'],
                           show_results=True)
 
+@flask_app.route('/vote/<category>', methods=['POST'])
+def vote(category):
+    if 'last_results' in session and category in session['last_results']:
+        if 'votes' not in session:
+            session['votes'] = {}
+        session['votes'][category] = True
+        session.modified = True
+        
+        # Update score
+        results = session['last_results']
+        results[category]["voted"] = True
+        results[category]["is_valid"] = True
+        results[category]["points"] = 10
+        results[category]["explanation"] += " (Accepted by vote)"
+        
+        round_score = sum(result["points"] for result in results.values())
+        session['total_score'] = session.get('total_score', 0) - session.get('last_round_score', 0) + round_score
+        session['last_round_score'] = round_score
+    
+    return render_template('game.html', 
+                          letter=session['round_data']["letter"], 
+                          categories=session['round_data']["categories"], 
+                          total_score=session['total_score'],
+                          results=session['last_results'],
+                          round_score=session['last_round_score'],
+                          session_id=session['session_id'],
+                          show_results=True)
+
 @flask_app.route('/new_round')
 def new_round():
     session['round_data'] = generate_round()
+    session['votes'] = {}
     session.modified = True
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
@@ -113,8 +158,8 @@ async def add_score(player_name: str, score: int):
 
 @fastapi_app.get("/validate/{category}/{letter}/{word}")
 async def validate(category: str, letter: str, word: str):
-    is_valid = validate_word(category, letter, word)
-    return {"category": category, "letter": letter, "word": word, "is_valid": is_valid}
+    is_valid, explanation = validate_word(category, letter, word)
+    return {"category": category, "letter": letter, "word": word, "is_valid": is_valid, "explanation": explanation}
 
 from fastapi.middleware.wsgi import WSGIMiddleware
 fastapi_app.mount("/", WSGIMiddleware(flask_app))

@@ -4,10 +4,11 @@ from sqlalchemy import create_engine, Column, Integer, String, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from ai_validator import validate_word
-from flask import Flask, render_template, request, session
+from flask import Flask, render_template, request, session, redirect, url_for
 from game_logic import generate_round, calculate_score
 import random
 import string
+from collections import defaultdict
 
 DATABASE_URL = "sqlite:///wordrush.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -27,8 +28,14 @@ fastapi_app = FastAPI()
 flask_app = Flask(__name__)
 flask_app.secret_key = "your_secret_key"
 
+# Multiplayer session management
+multiplayer_sessions = defaultdict(dict)
+
 def generate_session_id():
     return ''.join(random.choices(string.ascii_uppercase, k=4))
+
+def generate_player_id():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 @flask_app.route('/')
 def home():
@@ -36,27 +43,115 @@ def home():
 
 @flask_app.route('/game')
 def game():
-    if 'round_data' not in session:
-        session['round_data'] = generate_round()
-        session['total_score'] = 0
-        session['session_id'] = generate_session_id()
-        session['votes'] = {}
-    return render_template('game.html', 
-                          letter=session['round_data']["letter"], 
-                          categories=session['round_data']["categories"], 
-                          total_score=session.get('total_score', 0),
-                          session_id=session['session_id'])
+    mode = request.args.get('mode', 'single')
+    if mode == 'multi':
+        if 'player_id' not in session:
+            session['player_id'] = generate_player_id()
+        if 'session_id' not in session:
+            session['session_id'] = generate_session_id()
+            multiplayer_sessions[session['session_id']] = {
+                'players': {},
+                'round_data': generate_round(),
+                'votes': {}
+            }
+        session_data = multiplayer_sessions[session['session_id']]
+        session_data['players'][session['player_id']] = {
+            'score': 0,
+            'answers': {}
+        }
+        return render_template('game.html', 
+                              letter=session_data['round_data']["letter"], 
+                              categories=session_data['round_data']["categories"], 
+                              total_score=session_data['players'][session['player_id']]['score'],
+                              session_id=session['session_id'],
+                              mode='multi')
+    else:
+        if 'round_data' not in session:
+            session['round_data'] = generate_round()
+            session['total_score'] = 0
+            session['session_id'] = generate_session_id()
+            session['votes'] = {}
+        return render_template('game.html', 
+                              letter=session['round_data']["letter"], 
+                              categories=session['round_data']["categories"], 
+                              total_score=session.get('total_score', 0),
+                              session_id=session['session_id'],
+                              mode='single')
 
 @flask_app.route('/submit', methods=['POST'])
 def submit():
-    if 'round_data' not in session:
-        session['round_data'] = generate_round()
-        session['total_score'] = 0
-        session['session_id'] = generate_session_id()
-        session['votes'] = {}
-    
-    round_data = session['round_data']
-    answers = {category: request.form.get(category, '') for category in round_data["categories"]}
+    mode = request.args.get('mode', 'single')
+    if mode == 'multi':
+        session_data = multiplayer_sessions[session['session_id']]
+        round_data = session_data['round_data']
+        player_data = session_data['players'][session['player_id']]
+        answers = {category: request.form.get(category, '') for category in round_data["categories"]}
+        player_data['answers'] = answers
+        return redirect(url_for('multiplayer_results'))
+    else:
+        if 'round_data' not in session:
+            session['round_data'] = generate_round()
+            session['total_score'] = 0
+            session['session_id'] = generate_session_id()
+            session['votes'] = {}
+        
+        round_data = session['round_data']
+        answers = {category: request.form.get(category, '') for category in round_data["categories"]}
+        letter = round_data["letter"]
+        
+        category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
+        validation_results = validate_word(category_word_pairs) if category_word_pairs else {}
+        
+        results = {}
+        for category, answer in answers.items():
+            if answer:
+                is_valid, explanation, is_unique = validation_results.get(category, (False, "Validation failed", True))
+                points = 10 if is_valid else 0
+                uniqueness_bonus = 5 if is_valid and is_unique else 0
+            else:
+                is_valid, explanation, is_unique = False, "No answer provided", True
+                points = uniqueness_bonus = 0
+            results[category] = {
+                "answer": answer,
+                "is_valid": is_valid,
+                "points": points + uniqueness_bonus,
+                "explanation": explanation,
+                "voted": session.get('votes', {}).get(category, False)
+            }
+        
+        for category, result in results.items():
+            if result["voted"]:
+                result["is_valid"] = True
+                result["points"] = 10
+                result["explanation"] += " (Accepted by vote)"
+        
+        round_score = sum(result["points"] for result in results.values())
+        session['total_score'] = session.get('total_score', 0) + round_score
+        session['last_results'] = results
+        session['last_round_score'] = round_score
+        
+        db = SessionLocal()
+        new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
+        db.add(new_score)
+        db.commit()
+        db.close()
+        
+        return render_template('game.html', 
+                              letter=letter, 
+                              categories=round_data["categories"], 
+                              total_score=session['total_score'],
+                              results=results,
+                              round_score=round_score,
+                              session_id=session['session_id'],
+                              show_results=True,
+                              mode='single')
+
+@flask_app.route('/multiplayer_results')
+def multiplayer_results():
+    session_data = multiplayer_sessions[session['session_id']]
+    round_data = session_data['round_data']
+    player_data = session_data['players'][session['player_id']]
+    answers = player_data['answers']
     letter = round_data["letter"]
     
     category_word_pairs = [(category, letter, answer) for category, answer in answers.items() if answer]
@@ -66,7 +161,6 @@ def submit():
     for category, answer in answers.items():
         if answer:
             is_valid, explanation, is_unique = validation_results.get(category, (False, "Validation failed", True))
-            print(f"Processed {category}: {is_valid}, {explanation}, {is_unique}")  # Debug
             points = 10 if is_valid else 0
             uniqueness_bonus = 5 if is_valid and is_unique else 0
         else:
@@ -77,7 +171,7 @@ def submit():
             "is_valid": is_valid,
             "points": points + uniqueness_bonus,
             "explanation": explanation,
-            "voted": session.get('votes', {}).get(category, False)
+            "voted": session_data['votes'].get(category, False)
         }
     
     for category, result in results.items():
@@ -87,62 +181,84 @@ def submit():
             result["explanation"] += " (Accepted by vote)"
     
     round_score = sum(result["points"] for result in results.values())
-    session['total_score'] = session.get('total_score', 0) + round_score
-    session['last_results'] = results
-    session['last_round_score'] = round_score
-    
-    db = SessionLocal()
-    new_score = Score(player_name=f"Player1_{session['session_id']}", score=round_score)
-    db.add(new_score)
-    db.commit()
-    db.close()
+    player_data['score'] += round_score
+    session_data['last_results'] = results
+    session_data['last_round_score'] = round_score
     
     return render_template('game.html', 
                           letter=letter, 
                           categories=round_data["categories"], 
-                          total_score=session['total_score'],
+                          total_score=player_data['score'],
                           results=results,
                           round_score=round_score,
                           session_id=session['session_id'],
-                          show_results=True)
+                          show_results=True,
+                          mode='multi')
 
 @flask_app.route('/vote/<category>', methods=['POST'])
 def vote(category):
-    if 'last_results' in session and category in session['last_results']:
-        if 'votes' not in session:
-            session['votes'] = {}
-        session['votes'][category] = True
-        session.modified = True
+    mode = request.args.get('mode', 'single')
+    if mode == 'multi':
+        session_data = multiplayer_sessions[session['session_id']]
+        if 'last_results' in session_data and category in session_data['last_results']:
+            session_data['votes'][category] = True
+            results = session_data['last_results']
+            results[category]["voted"] = True
+            results[category]["is_valid"] = True
+            results[category]["points"] = 10
+            results[category]["explanation"] += " (Accepted by vote)"
+            
+            round_score = sum(result["points"] for result in results.values())
+            for player in session_data['players'].values():
+                player['score'] += round_score - session_data.get('last_round_score', 0)
+            session_data['last_round_score'] = round_score
         
-        results = session['last_results']
-        results[category]["voted"] = True
-        results[category]["is_valid"] = True
-        results[category]["points"] = 10
-        results[category]["explanation"] += " (Accepted by vote)"
+        return redirect(url_for('multiplayer_results'))
+    else:
+        if 'last_results' in session and category in session['last_results']:
+            if 'votes' not in session:
+                session['votes'] = {}
+            session['votes'][category] = True
+            session.modified = True
+            
+            results = session['last_results']
+            results[category]["voted"] = True
+            results[category]["is_valid"] = True
+            results[category]["points"] = 10
+            results[category]["explanation"] += " (Accepted by vote)"
+            
+            round_score = sum(result["points"] for result in results.values())
+            session['total_score'] = session.get('total_score', 0) - session.get('last_round_score', 0) + round_score
+            session['last_round_score'] = round_score
         
-        round_score = sum(result["points"] for result in results.values())
-        session['total_score'] = session.get('total_score', 0) - session.get('last_round_score', 0) + round_score
-        session['last_round_score'] = round_score
-    
-    return render_template('game.html', 
-                          letter=session['round_data']["letter"], 
-                          categories=session['round_data']["categories"], 
-                          total_score=session['total_score'],
-                          results=session['last_results'],
-                          round_score=session['last_round_score'],
-                          session_id=session['session_id'],
-                          show_results=True)
+        return render_template('game.html', 
+                              letter=session['round_data']["letter"], 
+                              categories=session['round_data']["categories"], 
+                              total_score=session['total_score'],
+                              results=session['last_results'],
+                              round_score=session['last_round_score'],
+                              session_id=session['session_id'],
+                              show_results=True,
+                              mode='single')
 
 @flask_app.route('/new_round')
 def new_round():
-    session['round_data'] = generate_round()
-    session['votes'] = {}
-    session.modified = True
-    return render_template('game.html', 
-                          letter=session['round_data']["letter"], 
-                          categories=session['round_data']["categories"], 
-                          total_score=session.get('total_score', 0),
-                          session_id=session['session_id'])
+    mode = request.args.get('mode', 'single')
+    if mode == 'multi':
+        session_data = multiplayer_sessions[session['session_id']]
+        session_data['round_data'] = generate_round()
+        session_data['votes'] = {}
+        return redirect(url_for('game', mode='multi'))
+    else:
+        session['round_data'] = generate_round()
+        session['votes'] = {}
+        session.modified = True
+        return render_template('game.html', 
+                              letter=session['round_data']["letter"], 
+                              categories=session['round_data']["categories"], 
+                              total_score=session.get('total_score', 0),
+                              session_id=session['session_id'],
+                              mode='single')
 
 @fastapi_app.get("/test")
 async def test_endpoint():

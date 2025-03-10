@@ -66,6 +66,7 @@ def submit():
     for category, answer in answers.items():
         if answer:
             is_valid, explanation, is_unique = validation_results.get(category, (False, "Validation failed", True))
+            print(f"Processed {category}: {is_valid}, {explanation}, {is_unique}")  # Debug
             points = 10 if is_valid else 0
             uniqueness_bonus = 5 if is_valid and is_unique else 0
         else:
@@ -111,7 +112,7 @@ def vote(category):
         if 'votes' not in session:
             session['votes'] = {}
         session['votes'][category] = True
-        session.modified = True
+            session.modified = True
         
         results = session['last_results']
         results[category]["voted"] = True

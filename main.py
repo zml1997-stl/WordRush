@@ -16,7 +16,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 metadata = MetaData()
 
-# Define a simple Scores table
+# Define Scores table
 class Score(Base):
     __tablename__ = "scores"
     id = Column(Integer, primary_key=True, index=True)
@@ -69,9 +69,17 @@ def submit():
         if answer:
             is_valid = validate_word(category, letter, answer)
             points = 10 if is_valid else 0
+            # Check if no valid answer exists
+            test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
+            if not is_valid and not any(validate_word(category, letter, test_word) for test_word in test_words):
+                points = 10  # Award points if no valid answer exists
         else:
             is_valid = False
             points = 0
+            # Check if no valid answer exists for blank
+            test_words = [f"{letter.lower()}{suffix}" for suffix in ["a", "e", "i", "o", "u"]]
+            if not any(validate_word(category, letter, test_word) for test_word in test_words):
+                points = 10  # Award points if no valid answer exists
         results[category] = {"answer": answer, "is_valid": is_valid, "points": points}
     
     # Calculate total round score
@@ -97,12 +105,8 @@ def submit():
 
 @flask_app.route('/new_round')
 def new_round():
-    # Show loading state while generating new round
-    session['is_loading'] = True
+    session['round_data'] = generate_round()
     session.modified = True
-    round_data = generate_round()  # This may take time due to Gemini checks
-    session['round_data'] = round_data
-    session['is_loading'] = False
     return render_template('game.html', 
                           letter=session['round_data']["letter"], 
                           categories=session['round_data']["categories"], 

@@ -97,7 +97,7 @@
 <body>
     <h1>WordRush</h1>
     <p>Letter: <strong>{{ letter }}</strong></p>
-    <p>Session ID: {{ session_id }}</p>
+    <p>Player: <strong>{{ player_name }}</strong></p>
     <div id="timer" class="timer">Time Left: 120</div>
     <p class="score">Total Score: {{ total_score }}</p>
 
@@ -118,7 +118,7 @@
                     {% endif %}
                 </p>
             {% endfor %}
-            <button onclick="window.location.href='/new_round'">Next Round</button>
+            <button onclick="window.location.href='/new_round?mode=single&player={{ player_name }}'">Next Round</button>
         </div>
     {% else %}
         <form id="gameForm" onsubmit="submitAnswers(event)">
@@ -134,27 +134,22 @@
 
     <script>
         const sessionId = "{{ session_id }}";
-        const playerId = Math.random().toString(36).substring(7); // Generate a random player ID
-        const socket = new WebSocket(`wss://${window.location.host}/ws/${sessionId}`);
+        const playerName = "{{ player_name }}";
+        const mode = "{{ mode }}";
 
-        socket.onopen = () => {
-            console.log("WebSocket connection established");
-        };
+        let timeLeft = 120;
+        const timer = document.getElementById('timer');
+        const form = document.getElementById('gameForm');
 
-        socket.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            if (message.type === 'answers_submitted') {
-                console.log(`Player ${message.player_id} submitted answers:`, message.answers);
-            } else if (message.type === 'vote_accepted') {
-                console.log(`Player ${message.player_id} accepted the vote for category: ${message.category}`);
-            } else if (message.type === 'player_left') {
-                console.log(`Player ${message.player_id} left the game`);
+        const countdown = setInterval(() => {
+            timeLeft--;
+            timer.textContent = `Time Left: ${timeLeft}`;
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                alert("Time's up! Submitting answers...");
+                form.submit();
             }
-        };
-
-        socket.onclose = () => {
-            console.log("WebSocket connection closed");
-        };
+        }, 1000);
 
         function submitAnswers(event) {
             event.preventDefault();
@@ -163,34 +158,40 @@
             formData.forEach((value, key) => {
                 answers[key] = value;
             });
-            socket.send(JSON.stringify({
-                type: 'submit_answers',
-                answers: answers
-            }));
+            fetch('/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    answers: answers,
+                    player_name: playerName,
+                    mode: mode,
+                    session_id: sessionId
+                }),
+            }).then(response => response.json())
+              .then(data => {
+                  window.location.href = `/game?mode=single&player=${encodeURIComponent(playerName)}&show_results=true`;
+              });
         }
 
         function vote(category) {
-            socket.send(JSON.stringify({
-                type: 'vote',
-                category: category
-            }));
+            fetch('/vote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    category: category,
+                    player_name: playerName,
+                    mode: mode,
+                    session_id: sessionId
+                }),
+            }).then(response => response.json())
+              .then(data => {
+                  window.location.reload();
+              });
         }
-
-        {% if not show_results %}
-            let timeLeft = 120;
-            const timer = document.getElementById('timer');
-            const form = document.getElementById('gameForm');
-            
-            const countdown = setInterval(() => {
-                timeLeft--;
-                timer.textContent = `Time Left: ${timeLeft}`;
-                if (timeLeft <= 0) {
-                    clearInterval(countdown);
-                    alert("Time's up! Submitting answers...");
-                    form.submit();
-                }
-            }, 1000);
-        {% endif %}
     </script>
 </body>
 </html>

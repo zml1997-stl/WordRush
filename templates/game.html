@@ -14,8 +14,6 @@
         .results { margin-top: 20px; }
         .correct { color: green; }
         .incorrect { color: red; }
-        .spinner { display: none; font-size: 20px; color: blue; }
-        .spinner.active { display: block; }
     </style>
 </head>
 <body>
@@ -24,20 +22,21 @@
     <p>Session ID: {{ session_id }}</p>
     <div id="timer" class="timer">Time Left: 120</div>
     <p class="score">Total Score: {{ total_score }}</p>
-    <div id="spinner" class="spinner {% if is_loading %}active{% endif %}">Generating categories...</div>
 
     {% if show_results %}
         <div class="results">
             <h2>Round Results</h2>
             <p>Round Score: {{ round_score }}</p>
             {% for category, result in results.items() %}
-                <p class="{% if result.is_valid %}correct{% else %}incorrect{% endif %}">
+                <p class="{% if result.points > 0 %}correct{% else %}incorrect{% endif %}">
                     {{ category }}: 
                     {% if result.answer %}"{{ result.answer }}"{% else %}(blank){% endif %} - 
-                    {% if result.is_valid %}Correct ({{ result.points }} points){% else %}Incorrect (0 points){% endif %}
+                    {% if result.is_valid %}Correct ({{ result.points }} points)
+                    {% elif result.points > 0 %}No valid answer exists ({{ result.points }} points)
+                    {% else %}Incorrect (0 points){% endif %}
                 </p>
             {% endfor %}
-            <button onclick="startNewRound()">Next Round</button>
+            <button onclick="window.location.href='/new_round'">Next Round</button>
         </div>
     {% else %}
         <form id="gameForm" action="/submit" method="POST">
@@ -67,11 +66,6 @@
                 }
             }, 1000);
         {% endif %}
-
-        function startNewRound() {
-            document.getElementById('spinner').classList.add('active');
-            window.location.href = '/new_round';
-        }
     </script>
 </body>
 </html>
